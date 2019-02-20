@@ -1,18 +1,47 @@
 #include "tokenizer.hpp"
+#include <stdlib.h>
+#include <stdio.h>
 #include <iostream>
 #include <list>
 #include <iterator>
 #include <string>
 #include <cstring>
 #include <vector>
-#include <readline/readline.h> 
-#include <unistd.h> // work with getcwd and chdir
+#include <readline/readline.h> // work with readline()
+#include <unistd.h> // work with getcwd(), chdir()
+#include <dirent.h> // work with opendir(), readdir()
+#include <sys/types.h>
+#include <term.h> // work with clears creen
+
 
 using namespace std;
 
 
-// Parse token list and 
-// execute valid commands
+// Clear screen in
+// current shell terminal.
+void ClearScreen()
+{
+    if (!cur_term)
+    {
+        int erret;
+        setupterm( NULL, STDOUT_FILENO, &erret );
+        
+        if (erret <= 0) // invalid
+            return;
+    }
+    
+    string str = "clear"; // terminal clear command
+    char *clr = &str[0u]; // points to addr.
+                          // of first char
+                          // in 'str'
+    
+    putp( tigetstr(clr) );
+}
+
+
+
+// Parse tokens list and
+// execute valid commands.
 void execute_commands( list<string>& tokens_list )
 {
 
@@ -20,19 +49,30 @@ void execute_commands( list<string>& tokens_list )
 
 	list<string>::iterator it;
 	
-	// store token list in vector 
-	// for element access
+	// Store token list in vector to gain
+    // ability to access individual elements.
 	for(it = tokens_list.begin(); it != tokens_list.end(); ++it)
-	{
+    {
 		tokens_array.push_back( *it );
-	}
-
-
+    }
+    
+    
+    /*
+     * Clear Screen command,
+     * Link -lcurses when compile,
+     * ie, g++ -o file -g file.cpp -lcurses
+     */
+    if(tokens_array.size() == 1 && tokens_array.at(0) == "clear")
+    {
+        ClearScreen();
+    }
+    /* END clear */
+    
+    
+    
 	/*
-	 * These following procedures will
-	 * anaylize redirections char <,>
-	 * and background operater &
-	 */
+     * Strip <,> and &
+     */
 	int strip_from = 0;
 
 	for(int i=0; i<tokens_array.size(); ++i)
@@ -51,15 +91,15 @@ void execute_commands( list<string>& tokens_list )
 	{
 		for(int i=tokens_array.size(); i>strip_from; --i)
 		{
+            // Delete tokens until
+            // i = strip_from.
 			tokens_array.pop_back(); 
 		}
-
-		// echo back
-		cout << "Message: IO redirection and background not implemented." << endl;
+        
+		cout << "WARNING: IO redirection and background not implemented." << endl;
 	}
 
-	/* END */
-
+	/* END  <,>,& */
 
 
 	/*
@@ -69,15 +109,15 @@ void execute_commands( list<string>& tokens_list )
 	{
 		if(tokens_array.size() != 2)
 		{
-			cout << "Error: Accepts exactly one argument." << endl;
+			cout << "ERROR: Accepts exactly one argument." << endl;
 		}
 		else
 		{
 			if( chdir(tokens_array.at(1).c_str()) != 0 )
-				cout << "Error: Directory does not exit or is not accessible." << endl;
+				cout << "ERROR: Directory does not exit or is not accessible." << endl;
 		}
 	}
-	/* END */
+	/* END  cd */
 
 
 	/*
@@ -88,59 +128,134 @@ void execute_commands( list<string>& tokens_list )
 		char path[2048];
 
 		if(getcwd(path, sizeof(path)) != NULL)
+        {
 			cout << "Current directory: " << path << endl;
-		else 
-			cout << "Error: Unable to obtain current directory." << endl;
-
+        }
+		else
+        {
+			cout << "ERROR: Unable to obtain current directory." << endl;
+        }
 	}
-	/* END */
+	/* END pwd */
 
-
-	// // display vector 
+    
+    /*
+     * List files - 'ls'
+     * List all directories and files
+     * in current dirrectory
+     */
+    if(tokens_array.at(0) == "ls")
+    {
+        if(tokens_array.size() > 2)
+        {
+            cout << "ERROR: Unable to open the directory." << endl;
+        }
+        else
+        {
+            DIR *directory;
+            struct dirent *dp;
+            
+            if( tokens_array.size() == 1 )  // current directory
+            {
+                // opendir() returns a pointer to
+                // object of type 'DIR'
+                if( (directory = opendir(".")) == NULL)
+                    cout << "ERROR: Unable to open current directory." << endl;
+                
+                // readdir() returns a pointer to
+                // object of type 'struct dirent'
+                while( (dp = readdir(directory)) )
+                    cout << dp->d_name << endl;
+                
+                // close directory
+                closedir (directory);
+            }
+            else // custom directory
+            {
+                if( (directory = opendir(tokens_array.at(1).c_str())) == NULL)
+                {
+                    cout << "ERROR: No such file or directory." << endl;
+                }
+                else
+                {
+                    while ( (dp = readdir(directory)) )
+                        cout << dp->d_name << endl;
+                    
+                    closedir (directory);
+                }
+            }
+        }
+    }
+    /* END ls */
+    
+    
+    
+    //TODO: IMPLEMENT fork() and
+    //      execvp() features
+    
+    
+    
+    
+    // // DEBUG: display vector
 	// for(int i=0; i<tokens_array.size(); ++i)
 	// {
 	// 	cout << tokens_array.at(i) << ";";
 	// }
 	// cout << endl;
+    
 }
+
 
 
 int main (int argc, char *argv[]) 
 {
-
+    // Clear shell screen
+    ClearScreen();
+    
+    // Welcome statement
+    cout << "#############################################################################################" << endl;
+    cout << "##                                 WELCOME TO MUSH v.1.0                                   ##" << endl;
+    cout << "#############################################################################################" << endl;
+    
+    
 	// Session starting...
 	while(true)
 	{
-		
 		char* str;
 		list<string> tokens_list;
 
-		// user input
+        
+		// get user input
 		str = readline("> ");
-
+        
+        // exit shell
 		if(str == NULL)
 			break;
 
-		 // cast str to type string
+        
+        // cast str to type string to
+        // work with other funcs.
 		string prompt = string(str);
 
 
-		// tokenize user prompt into tokens_list
+		// tokenize user prompt
+        // into tokens_list.
 		tokenize(prompt, tokens_list);
 
 
-		// // display list of tokens
+        // // DEBUG: display list
+        // // of tokens.
 		// display(tokens_list);
 
 
-		// analyze and execute
-		// command
+		// validate and execute
+		// user commands.
 		execute_commands(tokens_list);
 
 
-	} // End session
+	}
+    // End session.
 
 	cout << endl;
-
 
 }
