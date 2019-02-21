@@ -12,7 +12,8 @@ g++ -o command -g tokenizer.cpp command.cpp -lreadline -lcurses
 ./command
 ```
 3. Feature:
-- `ls`: list directories and files.
-- `cd`: change directory.
-- `pwd`: display current working directory.
-- `clear`: clear terminal screen.
+- `ls`: list directories and files. (custom-defined)
+- `cd`: change directory. (custom-defined)
+- `pwd`: display current working directory. (custom-defined)
+- `clear`: clear terminal screen. (custom-defined)
+-  ... : (system call using fork() and execvp())

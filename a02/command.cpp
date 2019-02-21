@@ -10,11 +10,27 @@
 #include <readline/readline.h> // work with readline()
 #include <unistd.h> // work with getcwd(), chdir()
 #include <dirent.h> // work with opendir(), readdir()
-#include <sys/types.h>
 #include <term.h> // work with clears creen
+#include <sys/wait.h>
+#include <sys/types.h>
+#include <typeinfo>
 
 
 using namespace std;
+
+
+// Convert vector<string> to char**
+char** argument(vector<string> child_cmd)
+{
+    char** result = new char*[child_cmd.size()];
+    for(int i=0; i < child_cmd.size(); ++i)
+    {
+        result[i] = new char[child_cmd[i].size() + 1];
+        strncpy( result[i], child_cmd[i].c_str(), child_cmd[i].size() );
+    }
+    
+    return result;
+}
 
 
 // Clear screen in
@@ -56,20 +72,6 @@ void execute_commands( list<string>& tokens_list )
 		tokens_array.push_back( *it );
     }
     
-    
-    /*
-     * Clear Screen command,
-     * Link -lcurses when compile,
-     * ie, g++ -o file -g file.cpp -lcurses
-     */
-    if(tokens_array.size() == 1 && tokens_array.at(0) == "clear")
-    {
-        ClearScreen();
-    }
-    /* END clear */
-    
-    
-    
 	/*
      * Strip <,> and &
      */
@@ -97,8 +99,8 @@ void execute_commands( list<string>& tokens_list )
 		}
         
 		cout << "WARNING: IO redirection and background not implemented." << endl;
+        return; // exit this function
 	}
-
 	/* END  <,>,& */
 
 
@@ -123,13 +125,13 @@ void execute_commands( list<string>& tokens_list )
 	/*
 	 * Current directory pwd
 	 */
-	if(tokens_array.size() == 1 && tokens_array.at(0) == "pwd")
+    else if(tokens_array.size() == 1 && tokens_array.at(0) == "pwd")
 	{
 		char path[2048];
 
 		if(getcwd(path, sizeof(path)) != NULL)
         {
-			cout << "Current directory: " << path << endl;
+			cout << path << endl;
         }
 		else
         {
@@ -144,7 +146,7 @@ void execute_commands( list<string>& tokens_list )
      * List all directories and files
      * in current dirrectory
      */
-    if(tokens_array.at(0) == "ls")
+    else if(tokens_array.at(0) == "ls")
     {
         if(tokens_array.size() > 2)
         {
@@ -160,15 +162,20 @@ void execute_commands( list<string>& tokens_list )
                 // opendir() returns a pointer to
                 // object of type 'DIR'
                 if( (directory = opendir(".")) == NULL)
+                {
                     cout << "ERROR: Unable to open current directory." << endl;
+                }
+                else
+                {
+                    // readdir() returns a pointer to
+                    // object of type 'struct dirent'
+                    while( (dp = readdir(directory)) )
+                        cout << dp->d_name << endl;
+                    
+                    // close directory
+                    closedir (directory);
+                }
                 
-                // readdir() returns a pointer to
-                // object of type 'struct dirent'
-                while( (dp = readdir(directory)) )
-                    cout << dp->d_name << endl;
-                
-                // close directory
-                closedir (directory);
             }
             else // custom directory
             {
@@ -188,26 +195,58 @@ void execute_commands( list<string>& tokens_list )
     }
     /* END ls */
     
+    /*
+     * Clear Screen command,
+     * Link -lcurses when compile,
+     * ie, g++ -o file -g file.cpp -lcurses
+     */
+    else if(tokens_array.size() == 1 && tokens_array.at(0) == "clear")
+    {
+        ClearScreen();
+    }
+    /* END clear */
     
-    
-    //TODO: IMPLEMENT fork() and
-    //      execvp() features
-    
-    
-    
-    
-    // // DEBUG: display vector
-	// for(int i=0; i<tokens_array.size(); ++i)
-	// {
-	// 	cout << tokens_array.at(i) << ";";
-	// }
-	// cout << endl;
+    /*
+     * Other system call using fork()
+     * and execvp()
+     */
+    else if(tokens_array.at(0) != "cd" || tokens_array.at(0) != "pwd" || tokens_array.at(0) != "clear")
+    {
+        pid_t pid;
+        int status;
+        char **argv = argument(tokens_array);
+        
+        if( (pid = fork()) < 0 )  // fork fail
+        {
+            cout << "ERROR: Unable to spawn program." << endl;
+        }
+        else if( pid == 0 ) // fork a child process
+        {
+            const char *cmd = tokens_array.at(0).c_str();
+            
+            
+            if( execvp( cmd , argument(tokens_array) ) < 0 )
+            {
+                cout << "ERROR: Unable to execute '" << tokens_array.at(0) << "'" << endl;
+                exit(1);
+            }
+        }
+        else
+        {
+            // parent waits for
+            // child to complete
+            while( wait(&status) != pid )
+                ;
+        }
+        free(argv);
+    }
+    /* END fork() */
     
 }
 
 
 
-int main (int argc, char *argv[]) 
+int main ()
 {
     // Clear shell screen
     ClearScreen();
