@@ -72,176 +72,244 @@ void execute_commands( list<string>& tokens_list )
 		tokens_array.push_back( *it );
     }
     
-	/*
-     * Strip <,> and &
+
+    /* Split tokens_array by ';'
+     * or '|' into valid commands
      */
-	int strip_from = 0;
+    int idx = 0;
+    bool done = false;
+    bool piped = false;
+    string str;
+    vector<string> cmd;
+    vector< vector<string> > cmd_array;
 
-	for(int i=0; i<tokens_array.size(); ++i)
-	{
-		if(tokens_array.at(i) == ">" || tokens_array.at(i) == "&" ||  tokens_array.at(i) == "<")
-		{
-			// strip all tokens
-			// from this point
-			strip_from = i;
-			break;
-
-		}
-	}
-
-	if(strip_from != 0)
-	{
-		for(int i=tokens_array.size(); i>strip_from; --i)
-		{
-            // Delete tokens until
-            // i = strip_from.
-			tokens_array.pop_back(); 
-		}
-        
-		cout << "WARNING: IO redirection and background not implemented." << endl;
-        return; // exit this function
-	}
-	/* END  <,>,& */
-
-
-	/*
-	 * Change directory cd
-	 */
-	if( tokens_array.at(0) == "cd" )
-	{
-		if(tokens_array.size() != 2)
-		{
-			cout << "ERROR: Accepts exactly one argument." << endl;
-		}
-		else
-		{
-			if( chdir(tokens_array.at(1).c_str()) != 0 )
-				cout << "ERROR: Directory does not exit or is not accessible." << endl;
-		}
-	}
-	/* END  cd */
-
-
-	/*
-	 * Current directory pwd
-	 */
-    else if(tokens_array.size() == 1 && tokens_array.at(0) == "pwd")
-	{
-		char path[2048];
-
-		if(getcwd(path, sizeof(path)) != NULL)
-        {
-			cout << path << endl;
-        }
-		else
-        {
-			cout << "ERROR: Unable to obtain current directory." << endl;
-        }
-	}
-	/* END pwd */
-
-    
-    /*
-     * List files - 'ls'
-     * List all directories and files
-     * in current dirrectory
-     */
-    else if(tokens_array.at(0) == "ls")
+    while(idx < tokens_array.size())
     {
-        if(tokens_array.size() > 2)
+
+        str = tokens_array.at(idx);
+        bool add_status = true;
+
+        if(str == ";" || str == "|" )
         {
-            cout << "ERROR: Unable to open the directory." << endl;
+            done = true; // mark the end of command
+            add_status = false; // skip this str
+
+            if(str == "|")
+                piped = true;
         }
-        else
+
+        // add str to command
+        if(add_status == true)
         {
-            DIR *directory;
-            struct dirent *dp;
+            cmd.push_back(str);
+        }
+
+        // add command to cmd_array
+        if(done == true && !cmd.empty())
+        {
+            cmd_array.push_back(cmd);
+
+            // clear cmd contents
+            cmd.clear();
+
+            // reset for next cmd
+            done = false;
+        }
+
+        idx++;
+
+    }
+
+    // add last cmd
+    if(!cmd.empty())
+    {
+        cmd_array.push_back(cmd);
+    }
+    /* END splitting cmd */
+
+
+    //
+    // EXECUTE EACH VALID COMMAND
+    //
+    for(int j=0; j<cmd_array.size(); ++j)
+    {
+
+        if(piped)
+        {
+            cout << "WARNING: Pipe not implemented." << endl;
+            piped = false;
+        }
+
+    	/*
+         * Strip <,> and &
+         */
+    	int strip_from = 0;
+
+    	for(int i=0; i<cmd_array.at(j).size(); ++i)
+    	{
+    		if(cmd_array.at(j).at(i) == ">" || cmd_array.at(j).at(i) == "&" ||  cmd_array.at(j).at(i) == "<")
+    		{
+    			// strip all tokens
+    			// from this point
+    			strip_from = i;
+    			break;
+
+    		}
+    	}
+
+    	if(strip_from != 0)
+    	{
+    		for(int i=cmd_array.at(j).size(); i>strip_from; --i)
+    		{
+                // Delete tokens until
+                // i = strip_from.
+    			cmd_array.at(j).pop_back(); 
+    		}
             
-            if( tokens_array.size() == 1 )  // current directory
+    		cout << "WARNING: IO redirection and background not implemented." << endl;
+            return; // exit this function
+    	}
+    	/* END  <,>,& */
+
+
+    	/*
+    	 * Change directory cd
+    	 */
+    	if( cmd_array.at(j).at(0) == "cd" )
+    	{
+    		if(cmd_array.at(j).size() != 2)
+    		{
+    			cout << "ERROR: Accepts exactly one argument." << endl;
+    		}
+    		else
+    		{
+    			if( chdir(cmd_array.at(j).at(1).c_str()) != 0 )
+    				cout << "ERROR: Directory does not exit or is not accessible." << endl;
+    		}
+    	}
+    	/* END  cd */
+
+
+    	/*
+    	 * Current directory pwd
+    	 */
+        else if(cmd_array.at(j).size() == 1 && cmd_array.at(j).at(0) == "pwd")
+    	{
+    		char path[2048];
+
+    		if(getcwd(path, sizeof(path)) != NULL)
             {
-                // opendir() returns a pointer to
-                // object of type 'DIR'
-                if( (directory = opendir(".")) == NULL)
-                {
-                    cout << "ERROR: Unable to open current directory." << endl;
-                }
-                else
-                {
-                    // readdir() returns a pointer to
-                    // object of type 'struct dirent'
-                    while( (dp = readdir(directory)) )
-                        cout << dp->d_name << endl;
-                    
-                    // close directory
-                    closedir (directory);
-                }
+    			cout << path << endl;
+            }
+    		else
+            {
+    			cout << "ERROR: Unable to obtain current directory." << endl;
+            }
+    	}
+    	/* END pwd */
+
+        
+        /*
+         * List files - 'ls'
+         * List all directories and files
+         * in current dirrectory
+         */
+        else if(cmd_array.at(j).at(0) == "ls")
+        {
+            if(cmd_array.at(j).size() > 2)
+            {
+                cout << "ERROR: Unable to open the directory." << endl;
+            }
+            else
+            {
+                DIR *directory;
+                struct dirent *dp;
                 
-            }
-            else // custom directory
-            {
-                if( (directory = opendir(tokens_array.at(1).c_str())) == NULL)
+                if( cmd_array.at(j).size() == 1 )  // current directory
                 {
-                    cout << "ERROR: No such file or directory." << endl;
-                }
-                else
-                {
-                    while ( (dp = readdir(directory)) )
-                        cout << dp->d_name << endl;
+                    // opendir() returns a pointer to
+                    // object of type 'DIR'
+                    if( (directory = opendir(".")) == NULL)
+                    {
+                        cout << "ERROR: Unable to open current directory." << endl;
+                    }
+                    else
+                    {
+                        // readdir() returns a pointer to
+                        // object of type 'struct dirent'
+                        while( (dp = readdir(directory)) )
+                            cout << dp->d_name << endl;
+                        
+                        // close directory
+                        closedir (directory);
+                    }
                     
-                    closedir (directory);
+                }
+                else // custom directory
+                {
+                    if( (directory = opendir(cmd_array.at(j).at(1).c_str())) == NULL)
+                    {
+                        cout << "ERROR: No such file or directory." << endl;
+                    }
+                    else
+                    {
+                        while ( (dp = readdir(directory)) )
+                            cout << dp->d_name << endl;
+                        
+                        closedir (directory);
+                    }
                 }
             }
         }
-    }
-    /* END ls */
-    
-    /*
-     * Clear Screen command,
-     * Link -lcurses when compile,
-     * ie, g++ -o file -g file.cpp -lcurses
-     */
-    else if(tokens_array.size() == 1 && tokens_array.at(0) == "clear")
-    {
-        ClearScreen();
-    }
-    /* END clear */
-    
-    /*
-     * Other system call using fork()
-     * and execvp()
-     */
-    else if(tokens_array.at(0) != "cd" || tokens_array.at(0) != "pwd" || tokens_array.at(0) != "clear")
-    {
-        pid_t pid;
-        int status;
-        char **argv = argument(tokens_array);
+        /* END ls */
         
-        if( (pid = fork()) < 0 )  // fork fail
+        /*
+         * Clear Screen command,
+         * Link -lcurses when compile,
+         * ie, g++ -o file -g file.cpp -lcurses
+         */
+        else if(cmd_array.at(j).size() == 1 && cmd_array.at(j).at(0) == "clear")
         {
-            cout << "ERROR: Unable to spawn program." << endl;
+            ClearScreen();
         }
-        else if( pid == 0 ) // fork a child process
+        /* END clear */
+        
+        /*
+         * Other system call using fork()
+         * and execvp()
+         */
+        else if(cmd_array.at(j).at(0) != "cd" || cmd_array.at(j).at(0) != "pwd" || cmd_array.at(j).at(0) != "clear")
         {
-            const char *cmd = tokens_array.at(0).c_str();
+            pid_t pid;
+            int status;
+            char **argv = argument(cmd_array.at(j));
             
-            
-            if( execvp( cmd , argument(tokens_array) ) < 0 )
+            if( (pid = fork()) < 0 )  // fork fail
             {
-                cout << "ERROR: Unable to execute '" << tokens_array.at(0) << "'" << endl;
-                exit(1);
+                cout << "ERROR: Unable to spawn program." << endl;
             }
+            else if( pid == 0 ) // fork a child process
+            {
+                const char *cmd = cmd_array.at(j).at(0).c_str();
+                
+                
+                if( execvp( cmd , argument(cmd_array.at(j)) ) < 0 )
+                {
+                    cout << "ERROR: Unable to execute '" << cmd_array.at(j).at(0) << "'" << endl;
+                    exit(1);
+                }
+            }
+            else
+            {
+                // parent waits for
+                // child to complete
+                while( wait(&status) != pid )
+                    ;
+            }
+            free(argv);
         }
-        else
-        {
-            // parent waits for
-            // child to complete
-            while( wait(&status) != pid )
-                ;
-        }
-        free(argv);
+        /* END fork() */
     }
-    /* END fork() */
-    
 }
 
 
